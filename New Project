@@ -1,0 +1,68 @@
+const BLOG_ID = "8404515887169778695"; // رقم مدونتك
+const BLOGGER_SCOPE = "https://www.googleapis.com/auth/blogger";
+
+// الدالة الأساسية: تنشر المقالات من الجدول
+function postArticlesToBlogger() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName("الجدول 1");
+  if (!sheet) {
+    throw new Error("❌ لم يتم العثور على ورقة باسم 'الجدول 1'");
+  }
+
+  const data = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < data.length; i++) {
+    let [title, content, status] = data[i];
+    if (!status || status === "") {
+      postToBlogger(title, content);
+      sheet.getRange(i + 1, 3).setValue("تم النشر");
+    }
+  }
+}
+
+// تنشر مقال واحد إلى Blogger
+function postToBlogger(title, content) {
+  const service = getOAuthService();
+  if (!service.hasAccess()) {
+    Logger.log("افتح هذا الرابط لتفويض الوصول: " + service.getAuthorizationUrl());
+    return;
+  }
+
+  const url = `https://www.googleapis.com/blogger/v3/blogs/${BLOG_ID}/posts/`;
+  const post = {
+    kind: "blogger#post",
+    title: title,
+    content: content
+  };
+
+  const response = UrlFetchApp.fetch(url, {
+    method: "post",
+    contentType: "application/json",
+    headers: {
+      Authorization: "Bearer " + service.getAccessToken()
+    },
+    payload: JSON.stringify(post)
+  });
+
+  Logger.log("✅ تم النشر: " + JSON.parse(response.getContentText()).url);
+}
+
+// إعداد OAuth2
+function getOAuthService() {
+  return OAuth2.createService("blogger")
+    .setAuthorizationBaseUrl("https://accounts.google.com/o/oauth2/auth")
+    .setTokenUrl("https://oauth2.googleapis.com/token")
+    .setClientId("265656439195-617uejibrclikl1d5bkesgputgskid6f.apps.googleusercontent.com")
+    .setClientSecret("🔐265656439195-617uejibrclikl1d5bkesgputgskid6f.apps.googleusercontent.com") // ← أدخل Client Secret هنا
+    .setCallbackFunction("authCallback")
+    .setPropertyStore(PropertiesService.getUserProperties())
+    .setScope(BLOGGER_SCOPE);
+}
+
+// دالة المصادقة
+function authCallback(request) {
+  const service = getOAuthService();
+  const authorized = service.handleCallback(request);
+  return HtmlService.createHtmlOutput(
+    authorized ? "✅ تمت المصادقة بنجاح!" : "❌ فشل المصادقة."
+  );
+}
